@@ -75,7 +75,7 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 2px 8px var(--shadow);
 }
 .header-inner {
-  max-width: 1200px;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 10px 16px;
   display: flex;
@@ -184,7 +184,7 @@ button { font-family: inherit; cursor: pointer; }
 .hidden { display: none !important; }
 
 /* ---------- Main ---------- */
-#app-main { flex: 1; max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px; }
+#app-main { flex: 1; max-width: 1800px; width: 100%; margin: 0 auto; padding: 16px; }
 .view { animation: fadein 0.15s ease; }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
