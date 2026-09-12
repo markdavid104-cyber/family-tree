@@ -2,40 +2,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'markdavid104@gmail.com';
+      return isSignedIn() && request.auth.token.email == 'markdavid104@gmail.com';
     }
     function allowlistPath() {
       return /databases/$(database)/documents/allowlist/$(request.auth.token.email);
     }
-    function isApproved() {
-      return request.auth != null &&
-        exists(allowlistPath()) &&
-        get(allowlistPath()).data.canView == true;
-    }
     function isApprover() {
       return isAdmin() ||
-        (isApproved() && get(allowlistPath()).data.isApprover == true);
+        (isSignedIn() && exists(allowlistPath()) && get(allowlistPath()).data.isApprover == true);
     }
 
+    // Anyone signed in with Google can view the tree. Only approvers can
+    // write directly - everyone else's edits go through pendingChanges.
     match /people/{personId} {
-      allow read: if isAdmin() || isApproved();
+      allow read: if isSignedIn();
       allow write: if isApprover();
     }
 
     match /pendingChanges/{changeId} {
-      allow read: if isAdmin() || isApproved();
-      allow create: if isAdmin() || isApproved();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isApprover();
     }
 
     match /allowlist/{email} {
-      allow read: if isAdmin() || isApproved();
-      allow write: if isAdmin() || isApprover();
+      allow read: if isSignedIn();
+      allow write: if isApprover();
     }
 
     match /meta/{doc} {
-      allow read: if isAdmin() || isApproved();
+      allow read: if isSignedIn();
       allow write: if isApprover();
     }
   }

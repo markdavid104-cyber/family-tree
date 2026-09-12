@@ -1760,11 +1760,11 @@ const db = getFirestore(fbApp);
     body.innerHTML = "";
     const title = document.createElement("div");
     title.className = "modal-title";
-    title.textContent = "Manage access";
+    title.textContent = "Manage approvers";
     body.appendChild(title);
     const note = document.createElement("div");
     note.className = "edit-note";
-    note.textContent = `${ADMIN_EMAIL} is the permanent owner. Everyone below can view the tree; check "approver" to let them approve changes and manage this list.`;
+    note.textContent = `Anyone who signs in with Google can view the tree — no approval needed for that. Approvers are the people below (plus ${ADMIN_EMAIL}, the permanent owner): they can edit directly and review everyone else's suggested changes.`;
     body.appendChild(note);
 
     const listEl = document.createElement("div");
@@ -1772,40 +1772,34 @@ const db = getFirestore(fbApp);
 
     function draw(rows) {
       listEl.innerHTML = "";
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-note";
+        empty.textContent = "No other approvers yet.";
+        listEl.appendChild(empty);
+        return;
+      }
       rows.forEach((r) => {
         const row = document.createElement("div");
         row.className = "access-list-row";
         const label = document.createElement("span");
         label.textContent = r.id;
-        const controls = document.createElement("span");
-        controls.style.display = "flex"; controls.style.gap = "8px"; controls.style.alignItems = "center";
-        const approverLabel = document.createElement("label");
-        approverLabel.style.display = "flex"; approverLabel.style.gap = "4px"; approverLabel.style.alignItems = "center";
-        const cb = document.createElement("input");
-        cb.type = "checkbox"; cb.checked = !!r.isApprover;
-        cb.addEventListener("change", async () => {
-          await setDoc(doc(db, "allowlist", r.id), { email: r.id, canView: true, isApprover: cb.checked }, { merge: true });
-        });
-        approverLabel.appendChild(cb);
-        approverLabel.appendChild(document.createTextNode("approver"));
         const rm = document.createElement("button");
         rm.className = "rm-btn"; rm.type = "button"; rm.textContent = "Remove";
         rm.addEventListener("click", async () => {
-          if (!confirm(`Remove access for ${r.id}?`)) return;
+          if (!confirm(`Remove approver access for ${r.id}? They can still view the tree, just not edit directly or approve changes.`)) return;
           await deleteDoc(doc(db, "allowlist", r.id));
           openAccessModal();
         });
-        controls.appendChild(approverLabel);
-        controls.appendChild(rm);
         row.appendChild(label);
-        row.appendChild(controls);
+        row.appendChild(rm);
         listEl.appendChild(row);
       });
     }
 
     getDocs(collection(db, "allowlist")).then((snap) => {
       const rows = [];
-      snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+      snap.forEach((d) => { if (d.data().isApprover) rows.push({ id: d.id, ...d.data() }); });
       draw(rows);
     });
 
@@ -1815,11 +1809,11 @@ const db = getFirestore(fbApp);
     emailInput.type = "text";
     emailInput.placeholder = "someone@gmail.com";
     const addBtn = document.createElement("button");
-    addBtn.className = "edit-btn-primary"; addBtn.type = "button"; addBtn.textContent = "Grant access";
+    addBtn.className = "edit-btn-primary"; addBtn.type = "button"; addBtn.textContent = "Make approver";
     addBtn.addEventListener("click", async () => {
       const email = emailInput.value.trim().toLowerCase();
       if (!email || !email.includes("@")) return;
-      await setDoc(doc(db, "allowlist", email), { email, canView: true, isApprover: false }, { merge: true });
+      await setDoc(doc(db, "allowlist", email), { email, isApprover: true }, { merge: true });
       emailInput.value = "";
       openAccessModal();
     });
@@ -1861,9 +1855,7 @@ const db = getFirestore(fbApp);
 
   // ---------------- Auth flow ----------------
 
-  function showAuthPanel(panelId) {
-    document.getElementById("auth-signin").classList.toggle("hidden", panelId !== "signin");
-    document.getElementById("auth-pending").classList.toggle("hidden", panelId !== "pending");
+  function showSignInScreen() {
     document.getElementById("auth-gate").classList.remove("hidden");
     document.getElementById("app-header").classList.add("hidden");
     document.getElementById("app-main").classList.add("hidden");
@@ -1882,12 +1874,6 @@ const db = getFirestore(fbApp);
     }
   });
 
-  document.getElementById("btn-copy-email").addEventListener("click", async () => {
-    const email = document.getElementById("auth-pending-email").textContent;
-    try { await navigator.clipboard.writeText(email); } catch (e) {}
-  });
-
-  document.getElementById("btn-signout-pending").addEventListener("click", () => signOut(auth));
   document.getElementById("btn-signout").addEventListener("click", () => {
     document.getElementById("tools-menu").classList.add("hidden");
     signOut(auth);
@@ -1900,12 +1886,7 @@ const db = getFirestore(fbApp);
       isApprover = true;
     } else {
       const allowDoc = await getDoc(doc(db, "allowlist", user.email));
-      if (!allowDoc.exists() || allowDoc.data().canView === false) {
-        document.getElementById("auth-pending-email").textContent = user.email;
-        showAuthPanel("pending");
-        return;
-      }
-      isApprover = !!allowDoc.data().isApprover;
+      isApprover = allowDoc.exists() && allowDoc.data().isApprover === true;
     }
 
     document.getElementById("auth-gate").classList.add("hidden");
@@ -1945,7 +1926,7 @@ const db = getFirestore(fbApp);
 
   onAuthStateChanged(auth, (user) => {
     if (user) startAppFor(user);
-    else showAuthPanel("signin");
+    else showSignInScreen();
   });
 
   if ("serviceWorker" in navigator) {
