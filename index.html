@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -122,17 +123,8 @@
         <label class="map-toggle"><input type="radio" name="map-mode" value="both" checked> Birthplace &amp; residence</label>
         <label class="map-toggle"><input type="radio" name="map-mode" value="birth"> Birthplace only</label>
         <label class="map-toggle"><input type="radio" name="map-mode" value="residence"> Residence only</label>
-        <span class="toolbar-spacer"></span>
-        <button id="btn-map-zoom-out" class="ghost-btn" title="Zoom out">&minus;</button>
-        <button id="btn-map-zoom-reset" class="ghost-btn" title="Reset zoom">100%</button>
-        <button id="btn-map-zoom-in" class="ghost-btn" title="Zoom in">+</button>
       </div>
-      <div id="map-viewport" class="map-viewport">
-        <div id="map-wrap" class="map-wrap">
-          <img src="world-map.jpg" alt="World map" class="map-image" draggable="false">
-          <div id="map-pins" class="map-pins"></div>
-        </div>
-      </div>
+      <div id="map-container" class="map-container"></div>
       <div id="map-unplaced" class="map-unplaced"></div>
     </section>
 
@@ -160,6 +152,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

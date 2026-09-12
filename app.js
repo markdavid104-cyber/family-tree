@@ -842,51 +842,32 @@ const db = getFirestore(fbApp);
     });
   });
 
-  // ---------------- Map view ----------------
+  // ---------------- Map view (Leaflet + OpenStreetMap) ----------------
 
   let mapMode = "both";
   document.querySelectorAll('input[name="map-mode"]').forEach((r) => {
     r.addEventListener("change", () => { mapMode = r.value; renderMap(); });
   });
 
-  let mapZoom = 1;
-  function setMapZoom(z) {
-    mapZoom = Math.min(4, Math.max(1, z));
-    document.getElementById("map-wrap").style.transform = `scale(${mapZoom})`;
-    document.getElementById("btn-map-zoom-reset").textContent = Math.round(mapZoom * 100) + "%";
-  }
-  document.getElementById("btn-map-zoom-in").addEventListener("click", () => setMapZoom(mapZoom + 0.5));
-  document.getElementById("btn-map-zoom-out").addEventListener("click", () => setMapZoom(mapZoom - 0.5));
-  document.getElementById("btn-map-zoom-reset").addEventListener("click", () => setMapZoom(1));
+  let leafletMap = null;
+  let leafletMarkers = [];
 
-  (function setupMapPan() {
-    const viewport = document.getElementById("map-viewport");
-    let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
-    viewport.addEventListener("mousedown", (e) => {
-      if (e.target.closest(".map-pin, .map-popover")) return;
-      dragging = true;
-      viewport.classList.add("grabbing");
-      startX = e.clientX; startY = e.clientY;
-      startLeft = viewport.scrollLeft; startTop = viewport.scrollTop;
-    });
-    window.addEventListener("mousemove", (e) => {
-      if (!dragging) return;
-      viewport.scrollLeft = startLeft - (e.clientX - startX);
-      viewport.scrollTop = startTop - (e.clientY - startY);
-    });
-    window.addEventListener("mouseup", () => { dragging = false; viewport.classList.remove("grabbing"); });
-  })();
-
-  function closeMapPopover() {
-    const existing = document.querySelector(".map-popover");
-    if (existing) existing.remove();
+  function ensureLeafletMap() {
+    if (leafletMap) return leafletMap;
+    leafletMap = L.map("map-container", { worldCopyJump: true }).setView([15, 78], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
+      maxZoom: 18,
+    }).addTo(leafletMap);
+    return leafletMap;
   }
 
   function renderMap() {
-    const pinsLayer = document.getElementById("map-pins");
+    const map = ensureLeafletMap();
     const unplacedEl = document.getElementById("map-unplaced");
-    pinsLayer.innerHTML = "";
-    closeMapPopover();
+
+    leafletMarkers.forEach((m) => map.removeLayer(m));
+    leafletMarkers = [];
 
     const buckets = {};
     const unplaced = new Set();
@@ -906,57 +887,34 @@ const db = getFirestore(fbApp);
     });
 
     Object.values(buckets).forEach((bucket) => {
-      const leftPct = ((bucket.lon + 180) / 360) * 100;
-      const topPct = ((90 - bucket.lat) / 180) * 100;
-
-      const pin = document.createElement("div");
-      pin.className = "map-pin";
-      pin.style.left = leftPct + "%";
-      pin.style.top = topPct + "%";
-
-      const dot = document.createElement("div");
-      dot.className = "map-pin-dot";
-      pin.appendChild(dot);
-
-      if (bucket.people.length > 1) {
-        const count = document.createElement("div");
-        count.className = "map-pin-count";
-        count.textContent = bucket.people.length;
-        pin.appendChild(count);
-      }
-
-      const label = document.createElement("div");
-      label.className = "map-pin-label";
-      label.textContent = Array.from(bucket.places).join(" / ");
-      pin.appendChild(label);
-
-      pin.addEventListener("click", (e) => {
-        e.stopPropagation();
-        closeMapPopover();
-        const pop = document.createElement("div");
-        pop.className = "map-popover";
-        pop.style.left = leftPct + "%";
-        pop.style.top = topPct + "%";
-        const title = document.createElement("div");
-        title.className = "map-popover-title";
-        title.textContent = Array.from(bucket.places).join(" / ");
-        pop.appendChild(title);
-        const subtitle = document.createElement("div");
-        subtitle.className = "map-popover-sub";
-        subtitle.textContent = `${bucket.people.length} ${bucket.people.length === 1 ? "person" : "people"}`;
-        pop.appendChild(subtitle);
-        bucket.people.forEach((entry) => {
-          const person = PEOPLE[entry.id];
-          const item = document.createElement("div");
-          item.className = "map-popover-item";
-          item.innerHTML = `${shortName(person)} ${person.lastName || ""} <span class="mp-tag">(${entry.tag})</span>`;
-          item.addEventListener("click", () => { closeMapPopover(); openModal(entry.id); });
-          pop.appendChild(item);
-        });
-        document.getElementById("map-wrap").appendChild(pop);
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="map-pin-marker">${bucket.people.length > 1 ? `<span class="mp-count">${bucket.people.length}</span>` : ""}</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 26],
+        popupAnchor: [0, -26],
       });
+      const marker = L.marker([bucket.lat, bucket.lon], { icon }).addTo(map);
 
-      pinsLayer.appendChild(pin);
+      const popupEl = document.createElement("div");
+      const title = document.createElement("div");
+      title.className = "map-popover-title";
+      title.textContent = Array.from(bucket.places).join(" / ");
+      popupEl.appendChild(title);
+      const subtitle = document.createElement("div");
+      subtitle.className = "map-popover-sub";
+      subtitle.textContent = `${bucket.people.length} ${bucket.people.length === 1 ? "person" : "people"}`;
+      popupEl.appendChild(subtitle);
+      bucket.people.forEach((entry) => {
+        const person = PEOPLE[entry.id];
+        const item = document.createElement("div");
+        item.className = "map-popover-item";
+        item.innerHTML = `${shortName(person)} ${person.lastName || ""} <span class="mp-tag">(${entry.tag})</span>`;
+        item.addEventListener("click", () => { map.closePopup(); openModal(entry.id); });
+        popupEl.appendChild(item);
+      });
+      marker.bindPopup(popupEl);
+      leafletMarkers.push(marker);
     });
 
     if (unplaced.size) {
@@ -964,11 +922,9 @@ const db = getFirestore(fbApp);
     } else {
       unplacedEl.textContent = "";
     }
-  }
 
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".map-popover, .map-pin")) closeMapPopover();
-  });
+    setTimeout(() => map.invalidateSize(), 0);
+  }
 
   // ---------------- Search ----------------
 

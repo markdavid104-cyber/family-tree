@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-tree-v2";
+const CACHE_NAME = "family-tree-v3";
 const CORE_ASSETS = [
   "./",
   "index.html",
@@ -6,7 +6,6 @@ const CORE_ASSETS = [
   "app.js",
   "manifest.json",
   "icon.svg",
-  "world-map.jpg",
 ];
 
 self.addEventListener("install", (event) => {

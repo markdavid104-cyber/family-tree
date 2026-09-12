@@ -266,8 +266,8 @@ button { font-family: inherit; cursor: pointer; }
 .tree-canvas-wrap {
   position: relative;
   overflow: auto;
-  height: 68vh;
-  min-height: 420px;
+  max-height: 68vh;
+  min-height: 220px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -373,57 +373,33 @@ button { font-family: inherit; cursor: pointer; }
 .map-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .map-toggle input { accent-color: var(--accent); }
 
-.map-viewport {
-  position: relative;
+.map-container {
   width: 100%;
   height: 68vh;
   min-height: 380px;
   border-radius: 12px;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   background: #0a1128;
-  cursor: grab;
 }
-.map-viewport.grabbing { cursor: grabbing; }
-.map-viewport.grabbing * { cursor: grabbing !important; }
-.map-wrap {
-  position: relative;
-  width: 100%;
-  transform-origin: 0 0;
-}
-.map-image { display: block; width: 100%; height: auto; filter: saturate(0.55) brightness(0.85); }
-.map-pins { position: absolute; inset: 0; }
+.leaflet-container { background: #0a1128; font-family: var(--font-body); }
+.leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border-radius: 10px; }
+.leaflet-popup-tip { background: var(--panel); }
+.leaflet-popup-content { margin: 12px 14px; }
 
-.map-pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  cursor: pointer;
-}
-.map-pin-dot {
-  width: 14px; height: 14px; border-radius: 50% 50% 50% 0;
+.map-pin-marker {
+  width: 26px; height: 26px; border-radius: 50% 50% 50% 0;
   background: var(--accent);
   border: 2px solid #fff;
   transform: rotate(-45deg);
   box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-  margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
 }
-.map-pin-count {
-  position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
-  background: var(--accent-strong); color: #1B1815; font-size: 10px; font-weight: 700;
-  border-radius: 999px; padding: 0 4px; min-width: 14px; text-align: center; line-height: 14px;
+.map-pin-marker .mp-count {
+  transform: rotate(45deg);
+  color: #fff; font-size: 11px; font-weight: 700; line-height: 1;
 }
-.map-pin-label {
-  position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
-  white-space: nowrap; font-size: 11px; background: var(--panel); color: var(--text);
-  padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border);
-  opacity: 0; pointer-events: none; transition: opacity 0.1s;
-}
-.map-pin:hover .map-pin-label { opacity: 1; }
 
-.map-popover {
-  position: absolute; z-index: 10; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: 0 8px 24px var(--shadow); padding: 10px; min-width: 180px; max-width: 240px;
-}
 .map-popover-title { font-family: var(--font-display); font-weight: 600; font-size: 13px; }
 .map-popover-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
 .map-popover-item { font-size: 13px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
