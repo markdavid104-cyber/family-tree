@@ -1842,15 +1842,20 @@ const db = getFirestore(fbApp);
     const existing = await getDocs(collection(db, "people"));
     if (!existing.empty) return;
     if (!confirm("This family tree's database is empty. Import the starter data (family-data.json) now?")) return;
-    const res = await fetch("family-data.json");
-    const data = await res.json();
-    const writes = Object.entries(data.people).map(([id, person]) => setDoc(doc(db, "people", id), person));
-    await Promise.all(writes);
-    await setDoc(doc(db, "meta", "config"), { rootId: data.rootId }, { merge: true });
-    await loadPeopleFromFirestore();
-    GENERATIONS = computeGenerations();
-    render();
-    alert("Starter data imported.");
+    try {
+      const res = await fetch("family-data.json");
+      if (!res.ok) throw new Error(`family-data.json not found here (status ${res.status}). Run this import from your local server, not the public site.`);
+      const data = await res.json();
+      const writes = Object.entries(data.people).map(([id, person]) => setDoc(doc(db, "people", id), person));
+      await Promise.all(writes);
+      await setDoc(doc(db, "meta", "config"), { rootId: data.rootId }, { merge: true });
+      await loadPeopleFromFirestore();
+      GENERATIONS = computeGenerations();
+      render();
+      alert("Starter data imported.");
+    } catch (e) {
+      alert("Import failed: " + e.message);
+    }
   }
 
   // ---------------- Auth flow ----------------
