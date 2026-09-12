@@ -781,10 +781,38 @@ const db = getFirestore(fbApp);
 
   // ---------------- Browse all view ----------------
 
+  const browseFilters = { generation: "", decade: "", status: "", gender: "" };
+
+  function decadeOf(birthDate) {
+    const y = yearOf(birthDate);
+    return y ? Math.floor(y / 10) * 10 : null;
+  }
+
+  function populateBrowseFilterOptions() {
+    const genSelect = document.getElementById("filter-generation");
+    const decSelect = document.getElementById("filter-decade");
+    const prevGen = genSelect.value, prevDec = decSelect.value;
+
+    const gens = Array.from(new Set(Object.keys(PEOPLE).map((id) => GENERATIONS[id]).filter((g) => g !== undefined))).sort((a, b) => a - b);
+    genSelect.innerHTML = '<option value="">All generations</option>' + gens.map((g) => `<option value="${g}">Generation ${g}</option>`).join("");
+    genSelect.value = prevGen;
+
+    const decades = Array.from(new Set(Object.values(PEOPLE).map((p) => decadeOf(p.birthDate)).filter(Boolean))).sort((a, b) => a - b);
+    decSelect.innerHTML = '<option value="">All decades</option>' + decades.map((d) => `<option value="${d}">${d}s</option>`).join("");
+    decSelect.value = prevDec;
+  }
+
   function renderBrowse() {
+    populateBrowseFilterOptions();
     const tbody = document.getElementById("browse-tbody");
     tbody.innerHTML = "";
     let ids = Object.keys(PEOPLE);
+
+    if (browseFilters.generation !== "") ids = ids.filter((id) => String(GENERATIONS[id]) === browseFilters.generation);
+    if (browseFilters.decade !== "") ids = ids.filter((id) => String(decadeOf(PEOPLE[id].birthDate)) === browseFilters.decade);
+    if (browseFilters.status === "living") ids = ids.filter((id) => !PEOPLE[id].deceased);
+    else if (browseFilters.status === "deceased") ids = ids.filter((id) => PEOPLE[id].deceased);
+    if (browseFilters.gender) ids = ids.filter((id) => PEOPLE[id].gender === browseFilters.gender);
 
     if (state.sortKey === "name") {
       ids.sort((a, b) => {
@@ -797,7 +825,9 @@ const db = getFirestore(fbApp);
       ids.sort((a, b) => (GENERATIONS[a] ?? 999) - (GENERATIONS[b] ?? 999));
     }
 
-    document.getElementById("browse-count").textContent = `${ids.length} people`;
+    const totalCount = Object.keys(PEOPLE).length;
+    document.getElementById("browse-count").textContent =
+      ids.length === totalCount ? `${totalCount} people` : `${ids.length} of ${totalCount} people`;
 
     const frag = document.createDocumentFragment();
     ids.forEach((id) => {
@@ -840,6 +870,19 @@ const db = getFirestore(fbApp);
       state.sortKey = btn.dataset.sort;
       renderBrowse();
     });
+  });
+
+  document.getElementById("filter-generation").addEventListener("change", (e) => { browseFilters.generation = e.target.value; renderBrowse(); });
+  document.getElementById("filter-decade").addEventListener("change", (e) => { browseFilters.decade = e.target.value; renderBrowse(); });
+  document.getElementById("filter-status").addEventListener("change", (e) => { browseFilters.status = e.target.value; renderBrowse(); });
+  document.getElementById("filter-gender").addEventListener("change", (e) => { browseFilters.gender = e.target.value; renderBrowse(); });
+  document.getElementById("btn-clear-filters").addEventListener("click", () => {
+    browseFilters.generation = ""; browseFilters.decade = ""; browseFilters.status = ""; browseFilters.gender = "";
+    document.getElementById("filter-generation").value = "";
+    document.getElementById("filter-decade").value = "";
+    document.getElementById("filter-status").value = "";
+    document.getElementById("filter-gender").value = "";
+    renderBrowse();
   });
 
   // ---------------- Map view (Leaflet + OpenStreetMap) ----------------
@@ -926,6 +969,388 @@ const db = getFirestore(fbApp);
     setTimeout(() => map.invalidateSize(), 0);
   }
 
+  // ---------------- Timeline view ----------------
+
+  function computeTimelineEvents() {
+    const events = [];
+    const seenMarriages = new Set();
+    Object.values(PEOPLE).forEach((p) => {
+      const by = yearOf(p.birthDate);
+      if (by) events.push({ date: p.birthDate, year: by, type: "birth", personIds: [p.id], text: `${fullName(p)} born` });
+      if (p.deceased) {
+        const dy = yearOf(p.deathDate);
+        if (dy) events.push({ date: p.deathDate, year: dy, type: "death", personIds: [p.id], text: `${fullName(p)} died` });
+      }
+      (p.partners || []).forEach((sp) => {
+        if (!sp.marriageDate) return;
+        const my = yearOf(sp.marriageDate);
+        if (!my) return;
+        const pairKey = [p.id, sp.id].sort().join("|") + "|" + sp.marriageDate;
+        if (seenMarriages.has(pairKey)) return;
+        seenMarriages.add(pairKey);
+        const other = PEOPLE[sp.id];
+        events.push({
+          date: sp.marriageDate, year: my, type: "marriage", personIds: [p.id, sp.id],
+          text: `${shortName(p)} & ${other ? shortName(other) : "Unknown"} married${sp.weddingPlace ? " in " + sp.weddingPlace : ""}`,
+        });
+      });
+    });
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    return events;
+  }
+
+  function renderTimeline() {
+    const showBirths = document.getElementById("filter-tl-births").checked;
+    const showMarriages = document.getElementById("filter-tl-marriages").checked;
+    const showDeaths = document.getElementById("filter-tl-deaths").checked;
+
+    const events = computeTimelineEvents().filter((e) =>
+      (e.type === "birth" && showBirths) || (e.type === "marriage" && showMarriages) || (e.type === "death" && showDeaths)
+    );
+
+    const byDecade = {};
+    events.forEach((e) => {
+      const decade = Math.floor(e.year / 10) * 10;
+      if (!byDecade[decade]) byDecade[decade] = [];
+      byDecade[decade].push(e);
+    });
+
+    const list = document.getElementById("timeline-list");
+    list.innerHTML = "";
+    const decades = Object.keys(byDecade).map(Number).sort((a, b) => a - b);
+
+    if (!decades.length) {
+      list.innerHTML = '<div class="empty-note">No dated events match these filters.</div>';
+      return;
+    }
+
+    const currentDecade = Math.floor(new Date().getFullYear() / 10) * 10;
+
+    decades.forEach((decade) => {
+      const group = document.createElement("div");
+      group.className = "timeline-decade";
+
+      const header = document.createElement("div");
+      header.className = "timeline-decade-header";
+      const toggle = document.createElement("span");
+      toggle.className = "timeline-decade-toggle";
+      const isNear = Math.abs(decade - currentDecade) <= 20;
+      toggle.textContent = isNear ? "▾" : "▸";
+      const title = document.createElement("span");
+      title.className = "timeline-decade-title";
+      title.textContent = `${decade}s`;
+      const count = document.createElement("span");
+      count.className = "timeline-decade-count";
+      count.textContent = `${byDecade[decade].length} event${byDecade[decade].length === 1 ? "" : "s"}`;
+      header.appendChild(toggle); header.appendChild(title); header.appendChild(count);
+
+      const eventsWrap = document.createElement("div");
+      eventsWrap.className = "timeline-events";
+      if (!isNear) eventsWrap.classList.add("hidden");
+
+      byDecade[decade].forEach((e) => {
+        const row = document.createElement("div");
+        row.className = "timeline-event";
+        const dateEl = document.createElement("span");
+        dateEl.className = "timeline-event-date";
+        dateEl.textContent = formatDate(e.date) || String(e.year);
+        const icon = document.createElement("span");
+        icon.className = "timeline-event-icon";
+        icon.textContent = e.type === "birth" ? "👶" : e.type === "marriage" ? "💍" : "✦";
+        const text = document.createElement("span");
+        text.className = "timeline-event-text";
+        text.textContent = e.text;
+        row.appendChild(dateEl); row.appendChild(icon); row.appendChild(text);
+        row.addEventListener("click", () => openModal(e.personIds[0]));
+        eventsWrap.appendChild(row);
+      });
+
+      header.addEventListener("click", () => {
+        eventsWrap.classList.toggle("hidden");
+        toggle.textContent = eventsWrap.classList.contains("hidden") ? "▸" : "▾";
+      });
+
+      group.appendChild(header);
+      group.appendChild(eventsWrap);
+      list.appendChild(group);
+    });
+  }
+
+  ["filter-tl-births", "filter-tl-marriages", "filter-tl-deaths"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", renderTimeline);
+  });
+  document.getElementById("btn-timeline-expand-all").addEventListener("click", () => {
+    document.querySelectorAll("#timeline-list .timeline-events").forEach((el) => el.classList.remove("hidden"));
+    document.querySelectorAll("#timeline-list .timeline-decade-toggle").forEach((el) => { el.textContent = "▾"; });
+  });
+  document.getElementById("btn-timeline-collapse-all").addEventListener("click", () => {
+    document.querySelectorAll("#timeline-list .timeline-events").forEach((el) => el.classList.add("hidden"));
+    document.querySelectorAll("#timeline-list .timeline-decade-toggle").forEach((el) => { el.textContent = "▸"; });
+  });
+
+  // ---------------- Dashboard view ----------------
+
+  function computeStats() {
+    const people = Object.values(PEOPLE);
+    const total = people.length;
+    const genderCounts = { m: 0, f: 0, u: 0 };
+    let livingCount = 0, deceasedCount = 0;
+    let lifespanSum = 0, lifespanCount = 0;
+    let oldestLiving = null, oldestLivingAge = -1;
+    const firstNameCounts = {}, lastNameCounts = {};
+    let biggestFamily = null, biggestFamilyCount = -1;
+    let longestMarriage = null;
+    const seenPairs = new Set();
+    const currentYear = new Date().getFullYear();
+
+    people.forEach((p) => {
+      genderCounts[p.gender === "m" ? "m" : p.gender === "f" ? "f" : "u"]++;
+      if (p.deceased) deceasedCount++; else livingCount++;
+
+      const by = yearOf(p.birthDate);
+      if (p.deceased) {
+        const dy = yearOf(p.deathDate);
+        if (by && dy) { lifespanSum += (dy - by); lifespanCount++; }
+      } else if (by) {
+        const age = currentYear - by;
+        if (age > oldestLivingAge) { oldestLivingAge = age; oldestLiving = p; }
+      }
+
+      if (p.firstName) firstNameCounts[p.firstName] = (firstNameCounts[p.firstName] || 0) + 1;
+      if (p.lastName) lastNameCounts[p.lastName] = (lastNameCounts[p.lastName] || 0) + 1;
+
+      const childCount = (p.childrenIds || []).length;
+      if (childCount > biggestFamilyCount) { biggestFamilyCount = childCount; biggestFamily = p; }
+
+      (p.partners || []).forEach((sp) => {
+        if (!sp.marriageDate) return;
+        const my = yearOf(sp.marriageDate);
+        if (!my) return;
+        const pairKey = [p.id, sp.id].sort().join("|");
+        if (seenPairs.has(pairKey)) return;
+        seenPairs.add(pairKey);
+        const other = PEOPLE[sp.id];
+        let endYear = currentYear;
+        if (p.deceased) endYear = Math.min(endYear, yearOf(p.deathDate) || currentYear);
+        if (other && other.deceased) endYear = Math.min(endYear, yearOf(other.deathDate) || currentYear);
+        const years = endYear - my;
+        if (!longestMarriage || years > longestMarriage.years) {
+          longestMarriage = { a: p, b: other, years };
+        }
+      });
+    });
+
+    function topNames(counts, n) {
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n);
+    }
+
+    const genValues = Object.values(GENERATIONS);
+    const generationSpan = genValues.length ? (Math.max(...genValues) - Math.min(...genValues) + 1) : 0;
+
+    return {
+      total, genderCounts, livingCount, deceasedCount,
+      avgLifespan: lifespanCount ? (lifespanSum / lifespanCount) : null,
+      oldestLiving, oldestLivingAge,
+      topFirstNames: topNames(firstNameCounts, 5),
+      topLastNames: topNames(lastNameCounts, 5),
+      biggestFamily, biggestFamilyCount,
+      longestMarriage,
+      generationSpan,
+    };
+  }
+
+  function computeUpcoming(withinDays) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const items = [];
+
+    function nextOccurrence(monthStr, dayStr) {
+      if (!monthStr || !dayStr) return null;
+      const month = parseInt(monthStr, 10) - 1;
+      const day = parseInt(dayStr, 10);
+      let next = new Date(today.getFullYear(), month, day);
+      if (next < today) next = new Date(today.getFullYear() + 1, month, day);
+      return Math.round((next - today) / 86400000);
+    }
+
+    Object.values(PEOPLE).forEach((p) => {
+      if (p.deceased) return;
+      const parts = parseDateParts(p.birthDate);
+      const daysUntil = nextOccurrence(parts.m, parts.day);
+      if (daysUntil === null) return;
+      items.push({ type: "birthday", personId: p.id, label: `${fullName(p)}'s birthday`, daysUntil });
+    });
+
+    Object.values(PEOPLE).forEach((p) => {
+      if (p.deceased) return;
+      (p.partners || []).forEach((sp) => {
+        if (!sp.marriageDate || p.id > sp.id) return;
+        const other = PEOPLE[sp.id];
+        if (other && other.deceased) return;
+        const parts = parseDateParts(sp.marriageDate);
+        const daysUntil = nextOccurrence(parts.m, parts.day);
+        if (daysUntil === null) return;
+        items.push({ type: "anniversary", personId: p.id, label: `${shortName(p)} & ${other ? shortName(other) : "Unknown"}'s anniversary`, daysUntil });
+      });
+    });
+
+    items.sort((a, b) => a.daysUntil - b.daysUntil);
+    return items.filter((i) => i.daysUntil <= withinDays);
+  }
+
+  function renderDashboard() {
+    const stats = computeStats();
+    const container = document.getElementById("dashboard-content");
+    container.innerHTML = "";
+
+    function section(titleText, contentEl) {
+      const sec = document.createElement("div");
+      sec.className = "dashboard-section";
+      const h = document.createElement("h3");
+      h.textContent = titleText;
+      sec.appendChild(h);
+      sec.appendChild(contentEl);
+      container.appendChild(sec);
+    }
+
+    function personLink(p, text) {
+      const span = document.createElement("span");
+      span.className = "stat-link";
+      span.textContent = text;
+      span.addEventListener("click", () => openModal(p.id));
+      return span;
+    }
+
+    function tile(value, label, subEl) {
+      const t = document.createElement("div");
+      t.className = "stat-tile";
+      const v = document.createElement("div");
+      v.className = "stat-value";
+      v.textContent = value;
+      const l = document.createElement("div");
+      l.className = "stat-label";
+      l.textContent = label;
+      t.appendChild(v); t.appendChild(l);
+      if (subEl) { subEl.className = "stat-sub"; t.appendChild(subEl); }
+      return t;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "stat-grid";
+    grid.appendChild(tile(stats.total, "People in the tree"));
+    grid.appendChild(tile(stats.livingCount, "Living"));
+    grid.appendChild(tile(stats.deceasedCount, "Deceased"));
+    grid.appendChild(tile(stats.generationSpan, "Generations spanned"));
+    grid.appendChild(tile(stats.avgLifespan ? Math.round(stats.avgLifespan) : "—", "Average lifespan (yrs)"));
+    grid.appendChild(tile(
+      `${stats.genderCounts.f} / ${stats.genderCounts.m}`,
+      "Female / Male" + (stats.genderCounts.u ? ` (+${stats.genderCounts.u} unknown)` : "")
+    ));
+    if (stats.oldestLiving) {
+      const sub = document.createElement("div");
+      sub.appendChild(personLink(stats.oldestLiving, fullName(stats.oldestLiving)));
+      grid.appendChild(tile(stats.oldestLivingAge, "Oldest living (age)", sub));
+    }
+    if (stats.biggestFamily && stats.biggestFamilyCount > 0) {
+      const sub = document.createElement("div");
+      sub.appendChild(personLink(stats.biggestFamily, fullName(stats.biggestFamily)));
+      grid.appendChild(tile(stats.biggestFamilyCount, "Most children", sub));
+    }
+    if (stats.longestMarriage && stats.longestMarriage.years > 0) {
+      const sub = document.createElement("div");
+      sub.appendChild(personLink(stats.longestMarriage.a, shortName(stats.longestMarriage.a)));
+      sub.appendChild(document.createTextNode(" & "));
+      if (stats.longestMarriage.b) sub.appendChild(personLink(stats.longestMarriage.b, shortName(stats.longestMarriage.b)));
+      grid.appendChild(tile(stats.longestMarriage.years, "Longest marriage (yrs)", sub));
+    }
+    section("Overview", grid);
+
+    function upcomingList(items) {
+      const list = document.createElement("div");
+      list.className = "upcoming-list";
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-note";
+        empty.textContent = "None in the next 60 days.";
+        list.appendChild(empty);
+        return list;
+      }
+      items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "upcoming-row" + (item.daysUntil === 0 ? " today" : "");
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        const days = document.createElement("span");
+        days.className = "upcoming-days";
+        days.textContent = item.daysUntil === 0 ? "Today" : item.daysUntil === 1 ? "Tomorrow" : `in ${item.daysUntil}d`;
+        row.appendChild(label); row.appendChild(days);
+        row.addEventListener("click", () => openModal(item.personId));
+        list.appendChild(row);
+      });
+      return list;
+    }
+
+    const upcoming = computeUpcoming(60);
+    const upcomingWrap = document.createElement("div");
+    upcomingWrap.className = "dashboard-two-col";
+
+    const bWrap = document.createElement("div");
+    const bTitle = document.createElement("div");
+    bTitle.style.fontWeight = "600"; bTitle.style.marginBottom = "8px";
+    bTitle.textContent = "🎂 Upcoming birthdays";
+    bWrap.appendChild(bTitle);
+    bWrap.appendChild(upcomingList(upcoming.filter((i) => i.type === "birthday").slice(0, 8)));
+
+    const aWrap = document.createElement("div");
+    const aTitle = document.createElement("div");
+    aTitle.style.fontWeight = "600"; aTitle.style.marginBottom = "8px";
+    aTitle.textContent = "💍 Upcoming anniversaries";
+    aWrap.appendChild(aTitle);
+    aWrap.appendChild(upcomingList(upcoming.filter((i) => i.type === "anniversary").slice(0, 8)));
+
+    upcomingWrap.appendChild(bWrap);
+    upcomingWrap.appendChild(aWrap);
+    section("Coming up (next 60 days)", upcomingWrap);
+
+    function nameFreqList(pairs) {
+      const wrap = document.createElement("div");
+      wrap.className = "name-freq-list";
+      const max = pairs.length ? pairs[0][1] : 1;
+      pairs.forEach(([name, count]) => {
+        const row = document.createElement("div");
+        row.className = "name-freq-row";
+        const label = document.createElement("span");
+        label.className = "name-freq-label";
+        label.textContent = name;
+        const bar = document.createElement("span");
+        bar.className = "name-freq-bar";
+        bar.style.width = Math.max(8, (count / max) * 80) + "px";
+        const countEl = document.createElement("span");
+        countEl.className = "name-freq-count";
+        countEl.textContent = count;
+        row.appendChild(label); row.appendChild(bar); row.appendChild(countEl);
+        wrap.appendChild(row);
+      });
+      return wrap;
+    }
+
+    const namesWrap = document.createElement("div");
+    namesWrap.className = "dashboard-two-col";
+    const fnWrap = document.createElement("div");
+    const fnTitle = document.createElement("div");
+    fnTitle.style.fontWeight = "600"; fnTitle.style.marginBottom = "8px";
+    fnTitle.textContent = "Most common first names";
+    fnWrap.appendChild(fnTitle); fnWrap.appendChild(nameFreqList(stats.topFirstNames));
+    const lnWrap = document.createElement("div");
+    const lnTitle = document.createElement("div");
+    lnTitle.style.fontWeight = "600"; lnTitle.style.marginBottom = "8px";
+    lnTitle.textContent = "Most common family names";
+    lnWrap.appendChild(lnTitle); lnWrap.appendChild(nameFreqList(stats.topLastNames));
+    namesWrap.appendChild(fnWrap);
+    namesWrap.appendChild(lnWrap);
+    section("Most common names", namesWrap);
+  }
+
   // ---------------- Search ----------------
 
   const searchInput = document.getElementById("search-input");
@@ -1009,6 +1434,8 @@ const db = getFirestore(fbApp);
     else if (state.view === "tree") renderTree();
     else if (state.view === "browse") renderBrowse();
     else if (state.view === "map") renderMap();
+    else if (state.view === "timeline") renderTimeline();
+    else if (state.view === "dashboard") renderDashboard();
     else if (state.view === "pending") renderPending();
   }
 
@@ -1875,7 +2302,7 @@ const db = getFirestore(fbApp);
 
     const hashState = readHash();
     const startId = (hashState && PEOPLE[hashState.id]) ? hashState.id : ROOT_ID;
-    const startView = (hashState && ["explorer", "tree", "browse", "map", "pending"].includes(hashState.view)) ? hashState.view : "explorer";
+    const startView = (hashState && ["explorer", "tree", "browse", "map", "timeline", "dashboard", "pending"].includes(hashState.view)) ? hashState.view : "explorer";
 
     state.history = [startId];
     state.historyIndex = 0;

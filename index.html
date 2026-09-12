@@ -47,6 +47,8 @@
         <button class="tab-btn" data-view="tree">Full Tree</button>
         <button class="tab-btn" data-view="browse">Browse All</button>
         <button class="tab-btn" data-view="map">Map</button>
+        <button class="tab-btn" data-view="timeline">Timeline</button>
+        <button class="tab-btn" data-view="dashboard">Dashboard</button>
         <button class="tab-btn hidden" id="tab-pending" data-view="pending">Pending <span id="pending-count-badge" class="pending-count-badge hidden"></span></button>
       </nav>
 
@@ -107,6 +109,21 @@
           <button class="sort-btn" data-sort="generation">Generation</button>
         </div>
       </div>
+      <div class="browse-filters">
+        <select id="filter-generation"><option value="">All generations</option></select>
+        <select id="filter-decade"><option value="">All decades</option></select>
+        <select id="filter-status">
+          <option value="">Living &amp; deceased</option>
+          <option value="living">Living only</option>
+          <option value="deceased">Deceased only</option>
+        </select>
+        <select id="filter-gender">
+          <option value="">All genders</option>
+          <option value="f">Female</option>
+          <option value="m">Male</option>
+        </select>
+        <button id="btn-clear-filters" class="ghost-btn">Clear filters</button>
+      </div>
       <div id="browse-table-wrap" class="browse-table-wrap">
         <table id="browse-table">
           <thead>
@@ -126,6 +143,24 @@
       </div>
       <div id="map-container" class="map-container"></div>
       <div id="map-unplaced" class="map-unplaced"></div>
+    </section>
+
+    <!-- TIMELINE VIEW -->
+    <section id="view-timeline" class="view hidden">
+      <div class="timeline-toolbar">
+        <label class="map-toggle"><input type="checkbox" id="filter-tl-births" checked> Births</label>
+        <label class="map-toggle"><input type="checkbox" id="filter-tl-marriages" checked> Marriages</label>
+        <label class="map-toggle"><input type="checkbox" id="filter-tl-deaths" checked> Deaths</label>
+        <span class="toolbar-spacer"></span>
+        <button id="btn-timeline-expand-all" class="ghost-btn">Expand all</button>
+        <button id="btn-timeline-collapse-all" class="ghost-btn">Collapse all</button>
+      </div>
+      <div id="timeline-list" class="timeline-list"></div>
+    </section>
+
+    <!-- DASHBOARD VIEW -->
+    <section id="view-dashboard" class="view hidden">
+      <div id="dashboard-content" class="dashboard-content"></div>
     </section>
 
     <!-- PENDING CHANGES VIEW (approvers only) -->
