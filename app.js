@@ -1412,6 +1412,7 @@ const db = getFirestore(fbApp);
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       setView(btn.dataset.view);
+      document.getElementById("mobile-menu").classList.add("hidden");
     });
   });
 
@@ -1599,6 +1600,7 @@ const db = getFirestore(fbApp);
     el.innerHTML = `Signed in as<br><strong>${currentUserEmail || ""}</strong><br>${isApprover ? "Approver" : "Viewer (edits need approval)"}`;
     document.getElementById("btn-manage-access").classList.toggle("hidden", !isApprover);
     document.getElementById("tab-pending").classList.toggle("hidden", !isApprover);
+    document.getElementById("tab-pending-mobile").classList.toggle("hidden", !isApprover);
   }
 
   function localRefresh() {
@@ -2010,8 +2012,13 @@ const db = getFirestore(fbApp);
     e.stopPropagation();
     document.getElementById("tools-menu").classList.toggle("hidden");
   });
+  document.getElementById("btn-mobile-menu").addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.getElementById("mobile-menu").classList.toggle("hidden");
+  });
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".tools-wrap")) document.getElementById("tools-menu").classList.add("hidden");
+    if (!e.target.closest(".mobile-nav-wrap")) document.getElementById("mobile-menu").classList.add("hidden");
   });
 
   document.getElementById("btn-add-person").addEventListener("click", () => {
@@ -2042,6 +2049,13 @@ const db = getFirestore(fbApp);
 
   // ---------------- Pending changes (approvers) ----------------
 
+  function setPendingBadge(count) {
+    [document.getElementById("pending-count-badge"), document.getElementById("pending-count-badge-mobile")].forEach((badge) => {
+      if (count) { badge.textContent = count; badge.classList.remove("hidden"); }
+      else badge.classList.add("hidden");
+    });
+  }
+
   function renderPending() {
     const list = document.getElementById("pending-list");
     list.innerHTML = "";
@@ -2049,9 +2063,7 @@ const db = getFirestore(fbApp);
       const pending = [];
       snap.forEach((d) => { if (d.data().status === "pending") pending.push({ id: d.id, ...d.data() }); });
 
-      const badge = document.getElementById("pending-count-badge");
-      if (pending.length) { badge.textContent = pending.length; badge.classList.remove("hidden"); }
-      else badge.classList.add("hidden");
+      setPendingBadge(pending.length);
 
       if (!pending.length) {
         list.innerHTML = '<div class="empty-note">No pending changes to review.</div>';
@@ -2130,9 +2142,7 @@ const db = getFirestore(fbApp);
     getDocs(collection(db, "pendingChanges")).then((snap) => {
       let count = 0;
       snap.forEach((d) => { if (d.data().status === "pending") count += 1; });
-      const badge = document.getElementById("pending-count-badge");
-      if (count) { badge.textContent = count; badge.classList.remove("hidden"); }
-      else badge.classList.add("hidden");
+      setPendingBadge(count);
     });
   }
 

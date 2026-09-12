@@ -52,6 +52,19 @@
         <button class="tab-btn hidden" id="tab-pending" data-view="pending">Pending <span id="pending-count-badge" class="pending-count-badge hidden"></span></button>
       </nav>
 
+      <div class="mobile-nav-wrap">
+        <button id="btn-mobile-menu" class="ghost-btn mobile-menu-btn" title="Menu">&#9776;</button>
+        <div id="mobile-menu" class="mobile-menu hidden">
+          <button class="tab-btn mobile-menu-item active" data-view="explorer">Explorer</button>
+          <button class="tab-btn mobile-menu-item" data-view="tree">Full Tree</button>
+          <button class="tab-btn mobile-menu-item" data-view="browse">Browse All</button>
+          <button class="tab-btn mobile-menu-item" data-view="map">Map</button>
+          <button class="tab-btn mobile-menu-item" data-view="timeline">Timeline</button>
+          <button class="tab-btn mobile-menu-item" data-view="dashboard">Dashboard</button>
+          <button class="tab-btn mobile-menu-item hidden" id="tab-pending-mobile" data-view="pending">Pending <span id="pending-count-badge-mobile" class="pending-count-badge hidden"></span></button>
+        </div>
+      </div>
+
       <button id="btn-quick-add" class="add-btn" title="Add a child linked under the person you're currently viewing">+ Add</button>
 
       <div class="tools-wrap">
